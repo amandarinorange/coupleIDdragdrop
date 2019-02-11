@@ -1,0 +1,265 @@
+---
+title: "Analyze Data"
+author: "Amanda"
+date: "February 2, 2017"
+output: word_document
+---
+#Brief Description:
+This script file begins with exploratory analyses of the data, including correlations and regressions. Then, turning to the key hypotheses, it employs statistical resampling procedures to obtain significance statistics regarding each frequency type. Specifically, the code performs bootstrap analyses that sample from the original data 10,000 times, and then creates 95% confidence intervals around the mean of each frequency type. The main goal is to show that the frequencies of the rating type that we are interested in (i.e., emergence -- the rating type that corresponds to the couple being viewed differently from the individual couple members) is significantly non-zero. 
+
+This code is a revised extension upon the original file in the "ps239T-final-project" folder
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Load required packages
+```{r}
+require(stats)
+require(xlsx)
+require(Hmisc)
+require(dplyr)
+require(stargazer)
+```
+
+#Exploratory Analyses
+```{r}
+corrmat <- rcorr(as.matrix(full[c("emerg", "oppo", "like", "coupreldur",
+                                  "selcoupreldur", "Oth1reldur", "Oth2reldur", "coupIOS")]), 
+                 type="pearson")
+#Write the correlation matrix to the excel file for later reference
+write.xlsx(round(corrmat$r,2), file="OthCoup_DragDrop_results.xlsx", sheetName="Corr")
+write.xlsx(round(corrmat$P,2), file="OthCoup_DragDrop_results.xlsx", sheetName="Corr p values", append=T)
+
+corrmat2 <- cor(full[,c("emerg","oppo","like", "coupIOS", "coupreldur", 
+                        "selcoupreldur", "Oth1reldur", "Oth2reldur")])
+stargazer(corrmat2, 
+          title="Correlation Matrix",
+          type = "html", 
+          out = "/Users/Amanda/Dropbox/SPSS Files/Couple Identity/Other Couple DragDrop Combined R/Results/CorrTable.html")
+```
+
+
+```{r}
+#For good measure, save this "full" dataframe into a spreadsheet for later reference. I'm saving it as a CSV here so that I can open the file in SPSS
+write.csv(full, file="OthCoup_DragDrop_fullcleaneddata.csv")
+```
+
+
+#Parametric (regression) Analyses
+Note: these regression analyses are also somewhat exploratory, because we did not have any a priori hypotheses about how or whether demographic variables and/or background relationship-related variables (like closeness or relationship length) would influence participants' trait ratings. However, just to cover our bases, these regressions will test for various associations.
+
+## First: are there gender differences in the frequencies of the 3 different rating types? Note that we will first need to re-code the gender variable by turning the numbers into string factors. 0= male; 1=female; 2= NA
+```{r}
+full <- full%>%
+  mutate(Gen=replace(Gen,Gen==0, "Male"))
+full <- full%>%
+  mutate(Gen=replace(Gen,Gen==1, "Female"))
+full <- full%>%
+  mutate(Gen=replace(Gen,Gen==2, NA))
+
+full$Gen <- as.factor(full$Gen)
+
+#Regression model for gender predicting emergence ratings
+summary(lm(emerg ~ Gen, data = full))
+
+#Regression model for gender predicting likes-attract ratings
+summary(lm(like ~ Gen, data = full))
+
+#Regression model for gender predicting opposites-attract ratings
+summary(lm(oppo ~ Gen, data = full))
+```
+There are no significant gender differences in ratings for any of the three different types.
+
+## Second: are there gender differences in the frequencies of the 3 different rating types? Note that we will first need to re-code the gender variable by turning the numbers into string factors. 0= male; 1=female; 2= NA
+```{r}
+
+full$TargetOrder <- as.factor(full$TargetOrder)
+
+#Regression model for order predicting emergence ratings
+summary(lm(emerg ~ TargetOrder, data = full))
+
+#Regression model for order predicting likes-attract ratings
+summary(lm(like ~ TargetOrder, data = full))
+
+#Regression model for order predicting opposites-attract ratings
+summary(lm(oppo ~ TargetOrder, data = full))
+```
+There are no significant effects of TargetOrder in ratings for any of the three different types.
+
+
+##Third: what about combined effects of IOS and relationship duration? IOS is a measure of participants' perceived closeness between the two couple members -- in other words, observer-rated relationship closeness. We saw in the correlation table that the zero-order bivariate correlations are small and nonsignificant, but let's look at a regression model that includes both IOS and participants' duration of knowing the other couple.
+```{r}
+#Multivariate regression model predicting emergence ratings
+summary(lm(emerg ~ coupIOS + selcoupreldur, data = full))
+
+#Multivariate regression model predicting likes-attract ratings
+summary(lm(like ~ coupIOS + selcoupreldur, data = full))
+
+#Multivariate regression model predicting oppo-attract ratings
+summary(lm(oppo ~ coupIOS + selcoupreldur, data = full))
+```
+Notice that there is one outlier who gave 7 total emergence ratings but a 1 on couple IOS. Subset the data to remove this person and re-analyze the association between emergence and IOS.
+```{r}
+full.outrm <- full[-which(full$subj==110),] 
+
+# regression model predicting emergence ratings from couple IOS, without outlier
+emergIOS.lm <- lm(emerg ~ coupIOS, data = full.outrm)
+
+plot(full.outrm$coupIOS, full.outrm$emerg)
+abline(a=emergIOS.lm$coefficients[1], b=emergIOS.lm$coefficients[2])
+```
+What about combined effects of IOS and Gender? And then let's compare a linear regression model to a negative binomial  
+
+First do the assumption checks.
+```{r}
+#Check for violation of homoscedasticity
+par(mfrow=c(2,2))  # set 2 rows and 2 column plot layout
+emerg.lm1 <- lm(emerg ~ coupIOS + Gen, data=full)  # linear model
+plot(emerg.lm1)
+
+#Check whether residuals are autocorrelated
+par(mfrow = c(1,1))
+acf(emerg.lm1$residuals)
+
+#Check that X and residuals are not correlated
+cor.test(full$coupIOS, emerg.lm1$residuals)
+cor.test(full$Gen, emerg.lm1$residuals)
+
+#Check that error terms average to 0
+mean(emerg.lm1$residuals)
+```
+Run the simple linear regression for Model 1
+```{r}
+summary(emerg.lm1)
+#Export regression table to file
+stargazer(emerg.lm1, 
+          title="Regression Results for Model 1", 
+          align = F, 
+          covariate.labels = c("IOS", "Gender (0=M, 1=F)", "Intercept"),
+          dep.var.labels = c("Frequency of Emergence Ratings"),
+          ci = TRUE,
+          ci.level = 0.95,
+          single.row = T,
+          omit.stat = c("adj.rsq", "n"),
+          type = "html", 
+          out = "/Users/Amanda/Desktop/PS239T/PS239T/ps239T-final-project/Results/Mod1RegTable.html")
+```
+Run the negative binomial regression, Model 2
+```{r}
+#Negative binomial with IOS and gender
+install.packages("MASS")
+library(MASS)
+emerg.nbfit <- glm.nb(emerg ~ coupIOS + Gen, data = full)
+summary(emerg.nbfit)
+
+#Export table
+stargazer(emerg.nbfit, 
+          title="Regression Results for Model 2", 
+          align = F, 
+          covariate.labels = c("IOS", "Gender (0=M, 1=F)", "Intercept"),
+          dep.var.labels = c("Frequency of Emergence Ratings"),
+          ci = TRUE,
+          ci.level = 0.95,
+          single.row = T,
+          type = "html", 
+          out = "/Users/Amanda/Desktop/PS239T/PS239T/ps239T-final-project/Results/Mod2RegTable.html")
+
+#Negative binomial without IOS or gender
+emerg.nbfit0 <- glm.nb(emerg ~ 1, data = full)
+summary(emerg.nbfit0)
+```
+Model comparison: compare negative binomial model with IOS and gender to negative binomial model without them -- i.e., an intercept-only model.
+```{r}
+#Compare nb models with and without covariates
+emerg.nb.comp <- anova(emerg.nbfit, emerg.nbfit0)
+emerg.nb.comp
+```
+Model comparison: compare negative binomial model with IOS and gender to lm model with IOS and gender
+```{r}
+emerg.nblm.comp <- 2*(logLik(emerg.nbfit)-logLik(emerg.lm1))
+pchisq(emerg.nblm.comp, df = 1, lower.tail=F)
+```
+
+#Bootstrap Analyses
+Now to test the key hypotheses, which we will do with bootstrap resampling. Specifically, we want to know whether the frequency of perceiving "emergent" traits at the couple/dyadic level is more than just a fluke; statistically, this should manifest in the frequency of emergence ratings being significantly greater than 0. In order to obtain p-values or confidence intervals for this question, we need to estimate the variance, and to do this, we employ bootstrapping methods.  
+
+The first step in bootstrap analysis is to resample from the original data. (Here, we resample with replacement)
+```{r}
+sixfreqs.samp <- function(sixfreqs){
+  samp <- sixfreqs[sample(1:nrow(sixfreqs), replace = TRUE),]
+  return(samp)
+}
+```
+
+Draw bootstrap samples to look at confidence intervals for the 3 different types of ratings. First, define how many bootstrap samples to draw (B), then initialize three empty vectors that will hold the resampled data, one vector for each type.
+```{r}
+B <- 10000
+emergfreqs.boot <- numeric(B)
+oppattrfreqs.boot <- numeric(B)
+likattrfreqs.boot <- numeric(B)
+
+#Resampling B times, and compute the mean frequency each time:
+for(i in 1:B){
+  sixfreqs.dat <- as.data.frame(sixfreqs.samp(sixfreqs))
+  emergfreqs.boot[i] <- mean(sixfreqs.dat$freq.ind0coup1+sixfreqs.dat$freq.ind1coup0)
+  oppattrfreqs.boot[i] <- mean(sixfreqs.dat$freq.inddiffcoup0+sixfreqs.dat$freq.inddiffcoup1)
+  likattrfreqs.boot[i] <- mean(sixfreqs.dat$freq.all0+sixfreqs.dat$freq.all1)
+}
+```
+
+Visualize the bootstrap distributions of each type with summary data and histograms:
+```{r}
+#For the emergence type:
+summary(emergfreqs.boot)
+hist(emergfreqs.boot)
+mean(emergfreqs.boot)
+sd(emergfreqs.boot)
+
+#For the opposites-attract type:
+summary(oppattrfreqs.boot)
+hist(oppattrfreqs.boot)
+mean(oppattrfreqs.boot)
+sd(oppattrfreqs.boot)
+
+#For the likes-attract type:
+summary(likattrfreqs.boot)
+hist(likattrfreqs.boot)
+mean(likattrfreqs.boot)
+sd(likattrfreqs.boot)
+```
+
+The main goal of this bootstrap procedure was to obtain estimates of variance and standard deviation around the mean of the frequencies of each combination type. Then we can use those estimates to create 95% confidence intervals around each mean. Let's see what these confidence intervals are!
+```{r}
+#95% percentile interval for emergence
+quantile(emergfreqs.boot, c(0.025, 0.975))
+
+#95% percentile interval for opposites attract
+quantile(oppattrfreqs.boot, c(0.025, 0.975))
+
+#95% percentile interval for likes attract
+quantile(likattrfreqs.boot, c(0.025, 0.975))
+```
+
+```{r}
+#95% PIVOTAL interval for emergence
+2*mean(sixfreqs.dat$freq.ind0coup1+sixfreqs.dat$freq.ind1coup0) - quantile(emergfreqs.boot, c(0.975, 0.025))
+
+#95% PIVOTAL interval for opposites attract
+2*mean(sixfreqs.dat$freq.inddiffcoup1+sixfreqs.dat$freq.inddiffcoup0) - quantile(oppattrfreqs.boot, c(0.975, 0.025))
+
+#95% PIVOTAL interval for likes attract
+2*mean(sixfreqs.dat$freq.all1+sixfreqs.dat$freq.all0) - quantile(likattrfreqs.boot, c(0.975, 0.025))
+
+```
+
+#Analyses on the traits: If we want to know whether there are specific traits on which it was generally more common for a certain rating type to occur, we'll need to call up the ratings.agg.df file again. The columns are named undescriptively (X1, X2...), so first we need to label these appropriately.
+```{r}
+ratings.agg.traits <- ratings.agg.df
+colnames(ratings.agg.traits) <- c("extro", "intel", "indep", "energ", "funny", "accom", "argum", "attra", "intro", "serio", "cling", "affec", "imbal", "wild", "relig", "healt", "athle", "impul", "artis", "adven", "modes", "assert", "conve", "neuro", "likea", "ambit", "domin")
+
+```
+
+```{r}
+ratings.agg.traits[] <- lapply(ratings.agg.traits, factor)
+#Save this dataframe into a spreadsheet for later reference. I'm saving it as a CSV here so that I can open the file in SPSS
+write.csv(ratings.agg.traits, file="OthCoup_DragDrop_traitratingfreqs.csv")
+```
