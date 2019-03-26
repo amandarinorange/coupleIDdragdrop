@@ -1,7 +1,10 @@
 # coupleIDdragdrop
-Couple Identity project: drag-and-drop pilot study
+
+
 Short Description
-The code in this project repo begins with a CSV file containing raw data from a Qualtrics survey, which participants from Amazon’s Mechanical Turk completed. A total of 209 responses were collected. Broadly, the survey asked that participants think of a romantic couple they know well, and to name the individuals within that couple. From there, participants provided three sets of personality trait ratings, one set for each target: individual A, individual B, and the couple as a unit. Each set consisted of 27 traits that participants rated as either describing the target (0) or not describing the target (1).
+
+
+The code in this  repo begins with a CSV file containing raw data from a Qualtrics survey, which participants from Amazon’s Mechanical Turk completed. A total of 209 responses were collected. Broadly, the survey asked that participants think of a romantic couple they know well, and to name the individuals within that couple. From there, participants provided three sets of personality trait ratings, one set for each target: individual A, individual B, and the couple as a unit. Each set consisted of 27 traits that participants rated as either describing the target (0) or not describing the target (1).
 
 This code first cleans the data. This involves, for example:
 1. filtering out participants who did not pass attention checks (an a priori criterion for exclusion)
@@ -28,11 +31,21 @@ gridExtra
 stats
 xlsx
 Hmisc
+
+
 Files
+
 Data
+
 OthCoup_DragDrop_bothbatches.csv: Contains raw data exported from Qualtrics, in its ‘legacy format’ option. This includes all trait ratings, attention checks, data assurance questions, demographic variables, and suspicion probes. To protect participant confidentiality, and to remain in compliance with CPHS protocol, MTurk worker IDs and location information have been removed from the raw data file.
+
 OthCoup_DragDrop_culleddata.xlsx: Cleaned and culled data spreadsheet obtained from the raw data (above). This contains the frequencies of trait ratings, classified by the unique types of combinations for the three targets in the study: OtherA, OtherB, and the Couple (as a single dyad).
+
+
 Code
+
 01_CleanData.Rmd: Loads the raw data from a CSV file that was downloaded from the Qualtrics survey site. Cleans the data to transform it into analyzable format. Exports key variables to the file OthCoup_DragDrop_culleddata.xlsx.
+
 02_AnalyzeData.Rmd: Conducts exploratory, descriptive, regression, and bootstrap analyses of the data.
+
 03_VisualizeData.Rmd: Produces univariate and bivariate plots of the analyses performed in the 02 file. Also exports a PDF of the plots that are key to addressing the project hypotheses.
